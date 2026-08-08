@@ -18,7 +18,7 @@ import {
   Server
 } from 'lucide-react';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000';
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:8000').replace(/\/+$/, '');
 
 interface Postmortem {
   id: string;
@@ -92,9 +92,14 @@ export default function SreDashboard() {
         const data = await res.json();
         setSelectedIncident(data.incident_id);
         await fetchIncidents();
+      } else {
+        const errText = await res.text();
+        console.error('Trigger failed:', res.status, errText);
+        alert(`Trigger error (${res.status}): ${errText}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Trigger error:', err);
+      alert(`Network error connecting to API (${API_BASE}): ${err?.message || err}`);
     } finally {
       setTriggeringType(null);
     }
@@ -102,14 +107,20 @@ export default function SreDashboard() {
 
   const handleLocalApproval = async (incidentId: string, approved: boolean) => {
     try {
-      await fetch(`${API_BASE}/api/incidents/${incidentId}/approve`, {
+      const res = await fetch(`${API_BASE}/api/incidents/${incidentId}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ approved, operator: 'Dashboard Web User' }),
       });
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error('Approval failed:', res.status, errText);
+        alert(`Approval error (${res.status}): ${errText}`);
+      }
       await fetchIncidents();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Approval error:', err);
+      alert(`Network error during approval: ${err?.message || err}`);
     }
   };
 

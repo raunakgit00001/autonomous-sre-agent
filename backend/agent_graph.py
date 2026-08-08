@@ -54,7 +54,7 @@ INCIDENT_SCENARIOS = {
 }
 
 
-def generate_llm_hypothesis(incident_type: str, logs: str, metrics: Dict[str, Any], retrieved_pm: Dict[str, Any]) -> str:
+async def generate_llm_hypothesis(incident_type: str, logs: str, metrics: Dict[str, Any], retrieved_pm: Dict[str, Any]) -> str:
     """
     Generates a root cause hypothesis using the Anthropic API if key is available,
     otherwise uses a smart deterministic fallback synthesizer.
@@ -62,8 +62,9 @@ def generate_llm_hypothesis(incident_type: str, logs: str, metrics: Dict[str, An
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if api_key:
         try:
-            client = anthropic.Anthropic(api_key=api_key)
-            prompt = f"""You are an Autonomous SRE Agent investigating an incident.
+            def _call_anthropic():
+                client = anthropic.Anthropic(api_key=api_key)
+                prompt = f"""You are an Autonomous SRE Agent investigating an incident.
 Incident Type: {incident_type}
 Raw Logs: {logs}
 Metrics: {metrics}
@@ -71,13 +72,14 @@ Top Retrieved Similar Postmortem: {retrieved_pm.get('id')} - {retrieved_pm.get('
 Postmortem Root Cause: {retrieved_pm.get('root_cause')}
 
 Synthesize a concise 2-sentence SRE root cause hypothesis and confidence explanation."""
+                message = client.messages.create(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=200,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                return message.content[0].text
             
-            message = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=200,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            return message.content[0].text
+            return await asyncio.to_thread(_call_anthropic)
         except Exception as e:
             logger.warning(f"Anthropic API call failed, falling back to synthesis engine: {e}")
 
@@ -140,7 +142,7 @@ async def run_agent_workflow(incident_id: str, incident_type: str) -> Dict[str, 
 
     # Step 2: LLM Root Cause Reasoning
     await asyncio.sleep(0.4)
-    hypothesis = generate_llm_hypothesis(incident_type, scenario["logs"], scenario["metrics"], top_pm)
+    hypothesis = await generate_llm_hypothesis(incident_type, scenario["logs"], scenario["metrics"], top_pm)
     incident["hypothesis"] = hypothesis
     incident["timeline"].append({
         "step": "HYPOTHESIS_GENERATED",
