@@ -94,10 +94,12 @@ Synthesize a concise 2-sentence SRE root cause hypothesis and confidence explana
     if gemini_key:
         try:
             def _call_gemini():
-                import google.generativeai as genai
-                genai.configure(api_key=gemini_key)
-                model = genai.GenerativeModel("gemini-1.5-flash")
-                response = model.generate_content(prompt)
+                from google import genai
+                client = genai.Client(api_key=gemini_key)
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=prompt
+                )
                 return response.text.strip()
             
             return await asyncio.to_thread(_call_gemini)
