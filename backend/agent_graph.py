@@ -96,11 +96,17 @@ Synthesize a concise 2-sentence SRE root cause hypothesis and confidence explana
             def _call_gemini():
                 from google import genai
                 client = genai.Client(api_key=gemini_key)
-                response = client.models.generate_content(
-                    model="gemini-2.5-flash",
-                    contents=prompt
-                )
-                return response.text.strip()
+                for model_name in ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.0-flash-exp"]:
+                    try:
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=prompt
+                        )
+                        if response and response.text:
+                            return response.text.strip()
+                    except Exception as err:
+                        logger.warning(f"Gemini model {model_name} failed: {err}")
+                raise RuntimeError("All Gemini model attempts failed")
             
             return await asyncio.to_thread(_call_gemini)
         except Exception as e:
